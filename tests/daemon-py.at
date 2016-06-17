@@ -197,7 +197,9 @@ m4_define([DAEMON_DETACH_ERRORS_PYN],
    AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach --bail], [1], [], [stderr])
    AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
      [0], [ignore], [])
-   AT_CHECK([test ! -s pid])
+   if test "$IS_WIN32" != "yes"; then
+     AT_CHECK([test ! -s pid])
+   fi
    AT_CLEANUP])
 
 DAEMON_DETACH_ERRORS_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
@@ -210,7 +212,9 @@ m4_define([DAEMON_DETACH_MONITOR_ERRORS_PYN],
    AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach --monitor --bail], [1], [], [stderr])
    AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
      [0], [ignore], [])
-   AT_CHECK([test ! -s pid])
+   if test "$IS_WIN32" != "yes"; then
+     AT_CHECK([test ! -s pid])
+   fi
    AT_CLEANUP])
 
 DAEMON_DETACH_MONITOR_ERRORS_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
