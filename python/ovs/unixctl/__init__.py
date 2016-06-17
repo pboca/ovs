@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import six
+import sys
 
 import ovs.util
 
@@ -71,14 +72,19 @@ def command_register(name, usage, min_args, max_args, callback, aux):
 def socket_name_from_target(target):
     assert isinstance(target, strtypes)
 
-    if target.startswith("/"):
+    if target.startswith('/') or target.find(':') > -1:
         return 0, target
 
+    """ Leave it to read the pid file on Windows also, the tests expect this
+    error in case of failure. """
     pidfile_name = "%s/%s.pid" % (ovs.dirs.RUNDIR, target)
     pid = ovs.daemon.read_pidfile(pidfile_name)
     if pid < 0:
         return -pid, "cannot read pidfile \"%s\"" % pidfile_name
 
-    return 0, "%s/%s.%d.ctl" % (ovs.dirs.RUNDIR, target, pid)
+    if sys.platform == "win32":
+        return 0, "%s/%s.ctl" % (ovs.dirs.RUNDIR, target)
+    else:
+        return 0, "%s/%s.%d.ctl" % (ovs.dirs.RUNDIR, target, pid)
 
 command_register("help", "", 0, 0, _unixctl_help, None)
