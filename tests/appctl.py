@@ -22,6 +22,27 @@ import ovs.unixctl.client
 import ovs.util
 import ovs.vlog
 
+def _win_signal_alarm(timeout):
+    import signal
+    import os
+    import time
+    import threading
+
+    class Alarm (threading.Thread):
+        def __init__ (self, timeout):
+            threading.Thread.__init__ (self)
+            self.timeout = timeout
+            self.setDaemon (True)
+
+        def run (self):
+            time.sleep (self.timeout)
+            os._exit (1)
+
+    def win_signal(timeout):
+        alarm = Alarm (timeout)
+        alarm.start ()
+
+    win_signal(timeout)
 
 def connect_to_target(target):
     error, str_result = ovs.unixctl.socket_name_from_target(target)
@@ -52,7 +73,10 @@ def main():
     args = parser.parse_args()
 
     if args.timeout:
-        signal.alarm(int(args.timeout))
+        if sys.platform == "win32":
+            _win_signal_alarm(int(args.timeout))
+        else:
+            signal.alarm(int(args.timeout))
 
     ovs.vlog.Vlog.init()
     target = args.target

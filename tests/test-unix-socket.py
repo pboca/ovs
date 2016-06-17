@@ -20,6 +20,27 @@ import sys
 
 import ovs.socket_util
 
+def _win_signal_alarm(timeout):
+    import signal
+    import os
+    import time
+    import threading
+
+    class Alarm (threading.Thread):
+        def __init__ (self, timeout):
+            threading.Thread.__init__ (self)
+            self.timeout = timeout
+            self.setDaemon (True)
+
+        def run (self):
+            time.sleep (self.timeout)
+            os._exit (1)
+
+    def win_signal(timeout):
+        alarm = Alarm (timeout)
+        alarm.start ()
+
+    win_signal(timeout)
 
 def main(argv):
     if len(argv) not in (2, 3):
@@ -33,7 +54,10 @@ def main(argv):
         sockname2 = sockname1
 
     signal.signal(signal.SIGALRM, signal.SIG_DFL)
-    signal.alarm(5)
+    if sys.platform == "win32":
+        _win_signal_alarm(5)
+    else:
+        signal.alarm(5)
 
     # Create a listening socket under name 'sockname1'.
     error, sock1 = ovs.socket_util.make_unix_socket(socket.SOCK_STREAM, False,
