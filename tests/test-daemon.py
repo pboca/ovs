@@ -26,8 +26,8 @@ def handler(signum, _):
 
 
 def main():
-
-    signal.signal(signal.SIGHUP, handler)
+    if sys.platform != "win32":
+        signal.signal(signal.SIGHUP, handler)
 
     parser = argparse.ArgumentParser(
             description="Open vSwitch daemonization test program for Python.")

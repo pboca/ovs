@@ -27,6 +27,7 @@ the following entry in /etc/fstab - 'C:/MinGW /mingw'.
 
 * Install the latest Python 2.x from python.org and verify that its path is
 part of Windows' PATH environment variable.
+You must also have the Python six and pywin32 libraries.
 
 * You will need at least Visual Studio 2013 (update 4) to compile userspace
 binaries.  In addition to that, if you want to compile the kernel module you

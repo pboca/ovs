@@ -17,6 +17,8 @@ import sys
 # This is only a wrapper over Linux implementations
 if sys.platform != "win32":
     import ovs.daemon_unix as daemon_util
+else:
+    import ovs.daemon_windows as daemon_util
 
 RESTART_EXIT_CODE = daemon_util.RESTART_EXIT_CODE
 

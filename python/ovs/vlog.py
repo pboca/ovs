@@ -384,6 +384,17 @@ class Vlog(object):
             logger.addHandler(Vlog.__file_handler)
 
     @staticmethod
+    def close_log_file():
+        """Closes the current log file. (This is useful on Windows, to ensure
+        that a reference to the file is not kept by the daemon in case of
+        detach.)"""
+
+        if Vlog.__log_file:
+            logger = logging.getLogger("file")
+            logger.removeHandler(Vlog.__file_handler)
+            Vlog.__file_handler.close()
+
+    @staticmethod
     def _unixctl_vlog_reopen(conn, unused_argv, unused_aux):
         if Vlog.__log_file:
             Vlog.reopen_log_file()
@@ -396,6 +407,7 @@ class Vlog(object):
         if Vlog.__log_file:
             logger = logging.getLogger("file")
             logger.removeHandler(Vlog.__file_handler)
+            Vlog.__file_handler.close()
         conn.reply(None)
 
     @staticmethod
