@@ -15,6 +15,7 @@
 import atexit
 import os
 import signal
+import sys
 
 import ovs.vlog
 
@@ -128,9 +129,13 @@ def _init():
     global _inited
     if not _inited:
         _inited = True
-
-        for signr in (signal.SIGTERM, signal.SIGINT,
-                      signal.SIGHUP, signal.SIGALRM):
-            if signal.getsignal(signr) == signal.SIG_DFL:
-                signal.signal(signr, _signal_handler)
+        if sys.platform == "win32":
+            for signr in (signal.SIGTERM, signal.SIGINT):
+                if signal.getsignal(signr) == signal.SIG_DFL:
+                    signal.signal(signr, _signal_handler)
+        else:
+            for signr in (signal.SIGTERM, signal.SIGINT,
+                          signal.SIGHUP, signal.SIGALRM):
+                if signal.getsignal(signr) == signal.SIG_DFL:
+                    signal.signal(signr, _signal_handler)
         atexit.register(_atexit_handler)
