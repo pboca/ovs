@@ -18,6 +18,7 @@
 #include "daemon.h"
 #include "daemon-private.h"
 #include <stdio.h>
+#include <io.h>
 #include <stdlib.h>
 #include "dirs.h"
 #include "ovs-thread.h"
@@ -25,6 +26,12 @@
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(daemon_windows);
+
+/* Constants for flock function */
+#define	LOCK_SH	0x0                         /* Shared lock. */
+#define	LOCK_EX	LOCKFILE_EXCLUSIVE_LOCK     /* Exclusive lock. */
+#define	LOCK_NB	LOCKFILE_FAIL_IMMEDIATELY	/* Don't block when locking. */
+#define	LOCK_UN	0x80000000                  /* Unlock. */
 
 static bool service_create;          /* Was --service specified? */
 static bool service_started;         /* Have we dispatched service to start? */
@@ -414,6 +421,33 @@ unlink_pidfile(void)
     }
 }
 
+static int
+flock(FILE* fd, int operation)
+{
+    NTSTATUS status;
+    HANDLE hFile;
+    OVERLAPPED ov = {0};
+
+    hFile = (HANDLE)_get_osfhandle(fileno(filep_pidfile));
+    if (hFile == INVALID_HANDLE_VALUE) {
+        VLOG_FATAL("Invalid handle value");
+        return -1;
+    }
+
+    if (operation & LOCK_UN) {
+        if (UnlockFileEx(hFile, 0, 0, 0xFFFF0000, &ov) == FALSE) {
+            return -1;
+        }
+    } else {
+        if (LockFileEx(hFile, operation, 0, 0, 0xFFFF0000, &ov) == FALSE) {
+            VLOG_FATAL("LockFileEx failed, status = 0x%08x\n", status);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 /* If a pidfile has been configured, creates it and stores the running
  * process's pid in it.  Ensures that the pidfile will be deleted when the
  * process exits. */
@@ -442,6 +476,16 @@ make_pidfile(void)
     fprintf(filep_pidfile, "%d\n", _getpid());
     if (fflush(filep_pidfile) == EOF) {
         VLOG_FATAL("Failed to write into the pidfile %s", pidfile);
+    }
+
+    fflush(filep_pidfile);
+    error = flock(filep_pidfile, LOCK_SH);
+    if (error) {
+        /* Looks like we failed to acquire the lock.  Note that, if we failed
+         * for some other reason (and '!overwrite_pidfile'), we will have
+         * left 'tmpfile' as garbage in the file system. */
+        VLOG_FATAL("%s: fcntl(F_SETLK) failed (%s)", pidfile,
+                   ovs_strerror(error));
     }
 
     /* Don't close the pidfile till the process exits. */
