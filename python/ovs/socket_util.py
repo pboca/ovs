@@ -17,6 +17,7 @@ import os
 import os.path
 import random
 import socket
+import sys
 
 import six
 from six.moves import range
@@ -53,6 +54,23 @@ def free_short_name(short_name):
     link_name = os.path.dirname(short_name)
     ovs.fatal_signal.unlink_file_now(link_name)
 
+def compat_read_unix_socket(path):
+    try:
+        file_handle = open(path, "r+")
+    except IOError as e:
+        vlog.warn("%s: open: %s" % (path, e.strerror))
+        raise socket.error(errno.ENOENT)
+
+    return int(file_handle.readline())
+
+def compat_write_unix_socket(path, port):
+    try:
+        file_handle = open(path, "w")
+    except IOError as e:
+        vlog.warn("%s: open: %s" % (path, e.strerror))
+        raise socket.error(errno.ENOENT)
+
+    file_handle.write(str(port))
 
 def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
     """Creates a Unix domain socket in the given 'style' (either
@@ -65,7 +83,10 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
     None."""
 
     try:
-        sock = socket.socket(socket.AF_UNIX, style)
+        if sys.platform == "win32":
+            sock = socket.socket(socket.AF_INET, style)
+        else:
+            sock = socket.socket(socket.AF_UNIX, style)
     except socket.error as e:
         return get_exception_errno(e), None
 
@@ -81,17 +102,28 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
                     return e.errno, None
 
             ovs.fatal_signal.add_file_to_unlink(bind_path)
-            sock.bind(bind_path)
+            if sys.platform == "win32":
+                sock.bind(("127.0.0.1", 0))
+                compat_write_unix_socket(bind_path, sock.getsockname()[1])
+            else:
+                sock.bind(bind_path)
 
-            try:
-                os.fchmod(sock.fileno(), 0o700)
-            except OSError as e:
-                pass
+                try:
+                    os.fchmod(sock.fileno(), 0o700)
+                except OSError as e:
+                    pass
         if connect_path is not None:
             try:
-                sock.connect(connect_path)
+                if sys.platform == "win32":
+                    port = compat_read_unix_socket(connect_path)
+                    sock.connect(("127.0.0.1", port))
+                else:
+                    sock.connect(connect_path)
             except socket.error as e:
-                if get_exception_errno(e) != errno.EINPROGRESS:
+                error = get_exception_errno(e)
+                if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                    error = errno.EINPROGRESS
+                if error != errno.EINPROGRESS:
                     raise
         return 0, sock
     except socket.error as e:
@@ -228,7 +260,10 @@ def inet_open_active(style, target, default_port, dscp):
         try:
             sock.connect(address)
         except socket.error as e:
-            if get_exception_errno(e) != errno.EINPROGRESS:
+            error = get_exception_errno(e)
+            if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                error = errno.EINPROGRESS
+            if error != errno.EINPROGRESS:
                 raise
         return 0, sock
     except socket.error as e:

@@ -15,6 +15,7 @@
 import copy
 import errno
 import os
+import sys
 
 import six
 from six.moves import range
@@ -147,6 +148,8 @@ class UnixctlServer(object):
     def run(self):
         for _ in range(10):
             error, stream = self._listener.accept()
+            if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                error = errno.EAGAIN
             if not error:
                 rpc = ovs.jsonrpc.Connection(stream)
                 self._conns.append(UnixctlConnection(rpc))
@@ -154,8 +157,8 @@ class UnixctlServer(object):
                 break
             else:
                 # XXX: rate-limit
-                vlog.warn("%s: accept failed: %s" % (self._listener.name,
-                                                     os.strerror(error)))
+                vlog.warn("%s: accept failed: %s %d %d" % (self._listener.name,
+                                                     os.strerror(error), error))
 
         for conn in copy.copy(self._conns):
             error = conn.run()
@@ -188,8 +191,12 @@ class UnixctlServer(object):
         if path is not None:
             path = "punix:%s" % ovs.util.abs_file_name(ovs.dirs.RUNDIR, path)
         else:
-            path = "punix:%s/%s.%d.ctl" % (ovs.dirs.RUNDIR,
-                                           ovs.util.PROGRAM_NAME, os.getpid())
+            if sys.platform == "win32":
+                path = "punix:%s/%s.ctl" % (ovs.dirs.RUNDIR,
+                                               ovs.util.PROGRAM_NAME)
+            else:
+                path = "punix:%s/%s.%d.ctl" % (ovs.dirs.RUNDIR,
+                                               ovs.util.PROGRAM_NAME, os.getpid())
 
         if version is None:
             version = ovs.version.VERSION

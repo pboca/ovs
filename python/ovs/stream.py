@@ -15,7 +15,7 @@
 import errno
 import os
 import socket
-
+import sys
 import six
 
 import ovs.poller
@@ -136,6 +136,8 @@ class Stream(object):
         if not error:
             while True:
                 error = stream.connect()
+                if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                    error = errno.EAGAIN
                 if error != errno.EAGAIN:
                     break
                 stream.run()
@@ -338,7 +340,7 @@ class PassiveStream(object):
             try:
                 sock, addr = self.socket.accept()
                 ovs.socket_util.set_nonblocking(sock)
-                if (sock.family == socket.AF_UNIX):
+                if (sys.platform != "win32") and (sock.family == socket.AF_UNIX):
                     return 0, Stream(sock, "unix:%s" % addr, 0)
                 return 0, Stream(sock, 'ptcp:%s:%s' % (addr[0],
                                                        str(addr[1])), 0)
