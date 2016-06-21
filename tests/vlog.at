@@ -195,7 +195,7 @@ m4_define([VLOG_REOPEN_WITHOUT_FILE_PYN],
    AT_SKIP_IF([test $2 = no])
    on_exit 'kill `cat test-unixctl.py.pid`'
 
-   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach], [0], [], [ignore])
 
    AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
      [Logging to file not configured
@@ -322,7 +322,7 @@ m4_define([VLOG_CLOSE_PYN],
 
    AT_CAPTURE_FILE([log])
    AT_CAPTURE_FILE([log.old])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach 2>/dev/null])
 
    AT_CHECK([APPCTL -t test-unixctl.py log message])
    AT_CHECK([APPCTL -t test-unixctl.py log message2])
@@ -406,7 +406,8 @@ m4_define([VLOG_SET_AND_LIST_PYN],
    on_exit 'kill `cat test-unixctl.py.pid`'
 
    AT_CAPTURE_FILE([log])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
+     --detach 2>/dev/null])
 
    AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
@@ -502,7 +503,7 @@ m4_define([VLOG_RFC5424_PYN],
 ])
 
    AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
--vFACILITY:daemon --detach])
+-vFACILITY:daemon --detach], [0], [], [ignore])
 
    AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:invalid], [0],
 [Facility invalid is invalid
