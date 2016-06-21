@@ -114,7 +114,8 @@ m4_define([UNIXCTL_SERVER_PYN],
    AT_SKIP_IF([test $2 = no])
    on_exit 'kill `cat test-unixctl.py.pid`'
    AT_CAPTURE_FILE([`pwd`/test-unixctl.py.log])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file --pidfile --detach],
+     [0], [], [ignore])
 
    AT_CHECK([APPCTL -t test-unixctl.py help], [0], [stdout])
    AT_CHECK([cat stdout], [0], [dnl

@@ -5,7 +5,7 @@ m4_define([VLOG_PYN],
    AT_SKIP_IF([test $2 = no])
    AT_CAPTURE_FILE([log_file])
    AT_CAPTURE_FILE([stderr_log])
-   AT_CHECK([$3 $srcdir/test-vlog.py --log-file log_file \
+   AT_CHECK([$3 $srcdir/test-vlog.py --log-file=log_file \
 -v dbg module_1:info module_2:warn syslog:off 2>stderr_log])
 
    AT_CHECK([sed -e 's/.*-.*-.*T..:..:..Z |//' \
@@ -192,7 +192,8 @@ m4_define([VLOG_REOPEN_WITHOUT_FILE_PYN],
    AT_SKIP_IF([test $2 = no])
    on_exit 'kill `cat test-unixctl.py.pid`'
 
-   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach],
+     [0], [], [ignore])
 
    AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
      [Logging to file not configured
@@ -403,8 +404,8 @@ m4_define([VLOG_SET_AND_LIST_PYN],
    on_exit 'kill `cat test-unixctl.py.pid`'
 
    AT_CAPTURE_FILE([log])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
-
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach],
+     [0], [], [ignore])
    AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
@@ -417,13 +418,15 @@ socket_util       info       info       info
 stream            info       info       info
 test-unixctl      info       info       info
 unixctl_server    info       info       info
-])
+], [ignore])
 
-   AT_CHECK([APPCTL -t test-unixctl.py vlog/set daemon:syslog:err])
-   AT_CHECK([APPCTL -t test-unixctl.py vlog/set file:dbg])
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set daemon:syslog:err],
+     [0], [], [ignore])
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set file:dbg],
+     [0], [], [ignore])
    AT_CHECK([APPCTL -t test-unixctl.py vlog/set nonexistent], [0],
   [no destination, level, or module "nonexistent"
-])
+], [ignore])
    AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
@@ -436,17 +439,18 @@ socket_util       info       info        dbg
 stream            info       info        dbg
 test-unixctl      info       info        dbg
 unixctl_server    info       info        dbg
-])
+], [ignore])
 
    AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern], [0],
   [Please supply a valid pattern and destination
-])
+], [ignore])
    AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:nonexistent], [0],
   [Destination nonexistent does not exist
-])
-   AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:file:'I<3OVS|%m'])
-   AT_CHECK([APPCTL -t test-unixctl.py log patterntest])
-   AT_CHECK([grep -q 'I<3OVS' log])
+], [ignore])
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:file:'I<3OVS|%m'],
+     [0], [], [ignore])
+   AT_CHECK([APPCTL -t test-unixctl.py log patterntest], [0], [], [ignore])
+   AT_CHECK([grep -q 'I<3OVS' `pwd`/log])
    AT_CLEANUP])
 
 VLOG_SET_AND_LIST_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
@@ -499,7 +503,7 @@ m4_define([VLOG_RFC5424_PYN],
 ])
 
    AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
--vFACILITY:daemon --detach])
+-vFACILITY:daemon --detach], [0], [], [ignore])
 
    AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:invalid], [0],
 [Facility invalid is invalid
