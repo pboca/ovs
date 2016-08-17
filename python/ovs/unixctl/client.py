@@ -17,7 +17,7 @@ import os
 import six
 
 import ovs.jsonrpc
-import ovs.stream
+import ovs.stream_unix as ovs_stream
 import ovs.util
 
 
@@ -59,8 +59,8 @@ class UnixctlClient(object):
         assert isinstance(path, str)
 
         unix = "unix:%s" % ovs.util.abs_file_name(ovs.dirs.RUNDIR, path)
-        error, stream = ovs.stream.Stream.open_block(
-            ovs.stream.Stream.open(unix))
+        error, stream = ovs_stream.Stream.open_block(
+            ovs_stream.Stream.open(unix))
 
         if error:
             vlog.warn("failed to connect to %s" % path)

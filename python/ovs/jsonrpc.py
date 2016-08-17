@@ -20,7 +20,7 @@ import six
 import ovs.json
 import ovs.poller
 import ovs.reconnect
-import ovs.stream
+import ovs.stream_unix as ovs_stream
 import ovs.timeval
 import ovs.util
 import ovs.vlog
@@ -372,8 +372,8 @@ class Session(object):
     @staticmethod
     def open(name):
         """Creates and returns a Session that maintains a JSON-RPC session to
-        'name', which should be a string acceptable to ovs.stream.Stream or
-        ovs.stream.PassiveStream's initializer.
+        'name', which should be a string acceptable to ovs_stream.Stream or
+        ovs_stream.PassiveStream's initializer.
 
         If 'name' is an active connection method, e.g. "tcp:127.1.2.3", the new
         session connects and reconnects, with back-off, to 'name'.
@@ -386,10 +386,10 @@ class Session(object):
         reconnect.set_name(name)
         reconnect.enable(ovs.timeval.msec())
 
-        if ovs.stream.PassiveStream.is_valid_name(name):
+        if ovs_stream.PassiveStream.is_valid_name(name):
             reconnect.set_passive(True, ovs.timeval.msec())
 
-        if not ovs.stream.stream_or_pstream_needs_probes(name):
+        if not ovs_stream.stream_or_pstream_needs_probes(name):
             reconnect.set_probe_interval(0)
 
         return Session(reconnect, None)
@@ -430,13 +430,13 @@ class Session(object):
 
         name = self.reconnect.get_name()
         if not self.reconnect.is_passive():
-            error, self.stream = ovs.stream.Stream.open(name)
+            error, self.stream = ovs_stream.Stream.open(name)
             if not error:
                 self.reconnect.connecting(ovs.timeval.msec())
             else:
                 self.reconnect.connect_failed(ovs.timeval.msec(), error)
         elif self.pstream is None:
-            error, self.pstream = ovs.stream.PassiveStream.open(name)
+            error, self.pstream = ovs_stream.PassiveStream.open(name)
             if not error:
                 self.reconnect.listening(ovs.timeval.msec())
             else:

@@ -23,7 +23,7 @@ import ovs.daemon
 import ovs.json
 import ovs.jsonrpc
 import ovs.poller
-import ovs.stream
+import ovs.stream_unix as ovs_stream
 
 
 def handle_rpc(rpc, msg):
@@ -53,7 +53,7 @@ def handle_rpc(rpc, msg):
 
 
 def do_listen(name):
-    error, pstream = ovs.stream.PassiveStream.open(name)
+    error, pstream = ovs_stream.PassiveStream.open(name)
     if error:
         sys.stderr.write("could not listen on \"%s\": %s\n"
                          % (name, os.strerror(error)))
@@ -111,7 +111,7 @@ def do_request(name, method, params_string):
         sys.stderr.write("not a valid JSON-RPC request: %s\n" % s)
         sys.exit(1)
 
-    error, stream = ovs.stream.Stream.open_block(ovs.stream.Stream.open(name))
+    error, stream = ovs_stream.Stream.open_block(ovs_stream.Stream.open(name))
     if error:
         sys.stderr.write("could not open \"%s\": %s\n"
                          % (name, os.strerror(error)))
@@ -142,7 +142,7 @@ def do_notify(name, method, params_string):
         sys.stderr.write("not a valid JSON-RPC notification: %s\n" % s)
         sys.exit(1)
 
-    error, stream = ovs.stream.Stream.open_block(ovs.stream.Stream.open(name))
+    error, stream = ovs_stream.Stream.open_block(ovs_stream.Stream.open(name))
     if error:
         sys.stderr.write("could not open \"%s\": %s\n"
                          % (name, os.strerror(error)))
@@ -174,7 +174,7 @@ def main(argv):
 listen LOCAL             listen for connections on LOCAL
 request REMOTE METHOD PARAMS   send request, print reply
 notify REMOTE METHOD PARAMS  send notification and exit
-""" + ovs.stream.usage("JSON-RPC")
+""" + ovs_stream.usage("JSON-RPC")
 
     group = parser.add_argument_group(title="Commands",
                                       description=group_description)
