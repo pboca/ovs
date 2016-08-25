@@ -14,13 +14,17 @@
 
 import errno
 import os
+import sys
 
 import six
 
 import ovs.json
 import ovs.poller
 import ovs.reconnect
-import ovs.stream_unix as ovs_stream
+if sys.platform == "win32":
+    import ovs.stream_windows as ovs_stream
+else:
+    import ovs.stream_unix as ovs_stream
 import ovs.timeval
 import ovs.util
 import ovs.vlog
@@ -274,6 +278,9 @@ class Connection(object):
                     except UnicodeError:
                         error = errno.EILSEQ
                 if error:
+                    if (sys.platform == "win32"
+                       and error == errno.WSAEWOULDBLOCK):
+                        error = errno.EAGAIN
                     if error == errno.EAGAIN:
                         return error, None
                     else:

@@ -27,6 +27,7 @@ ovs_pyfiles = \
 	python/ovs/process.py \
 	python/ovs/reconnect.py \
 	python/ovs/socket_util.py \
+	python/ovs/stream_windows.py \
 	python/ovs/stream_unix.py \
 	python/ovs/timeval.py \
 	python/ovs/unixctl/__init__.py \

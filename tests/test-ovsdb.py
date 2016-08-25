@@ -30,6 +30,10 @@ import ovs.poller
 import ovs.util
 from ovs.fatal_signal import signal_alarm
 import six
+if sys.platform == "win32":
+    import ovs.stream_windows as ovs_stream
+else:
+    import ovs.stream_unix as ovs_stream
 
 
 def unbox_json(json):
@@ -540,8 +544,8 @@ def do_idl(schema_file, remote, *commands):
     idl = ovs.db.idl.Idl(remote, schema_helper)
 
     if commands:
-        error, stream = ovs.stream.Stream.open_block(
-            ovs.stream.Stream.open(remote))
+        error, stream = ovs_stream.Stream.open_block(
+            ovs_stream.Stream.open(remote))
         if error:
             sys.stderr.write("failed to connect to \"%s\"" % remote)
             sys.exit(1)

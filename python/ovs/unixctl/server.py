@@ -22,7 +22,10 @@ from six.moves import range
 
 import ovs.dirs
 import ovs.jsonrpc
-import ovs.stream_unix as ovs_stream
+if sys.platform == "win32":
+    import ovs.stream_windows as ovs_stream
+else:
+    import ovs.stream_unix as ovs_stream
 import ovs.unixctl
 import ovs.util
 import ovs.version
@@ -148,6 +151,8 @@ class UnixctlServer(object):
     def run(self):
         for _ in range(10):
             error, stream = self._listener.accept()
+            if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                error = errno.EAGAIN
             if not error:
                 rpc = ovs.jsonrpc.Connection(stream)
                 self._conns.append(UnixctlConnection(rpc))
@@ -155,8 +160,8 @@ class UnixctlServer(object):
                 break
             else:
                 # XXX: rate-limit
-                vlog.warn("%s: accept failed: %s" % (self._listener.name,
-                                                     os.strerror(error)))
+                vlog.warn("%s: accept failed: %s %d"
+                          % (self._listener.name, os.strerror(error), error))
 
         for conn in copy.copy(self._conns):
             error = conn.run()

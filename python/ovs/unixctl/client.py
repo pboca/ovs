@@ -13,12 +13,16 @@
 # limitations under the License.
 
 import os
+import sys
 
 import six
 
 import ovs.jsonrpc
-import ovs.stream_unix as ovs_stream
 import ovs.util
+if sys.platform == "win32":
+    import ovs.stream_windows as ovs_stream
+else:
+    import ovs.stream_unix as ovs_stream
 
 
 vlog = ovs.vlog.Vlog("unixctl_client")

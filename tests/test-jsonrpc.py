@@ -23,7 +23,10 @@ import ovs.daemon
 import ovs.json
 import ovs.jsonrpc
 import ovs.poller
-import ovs.stream_unix as ovs_stream
+if sys.platform == "win32":
+    import ovs.stream_windows as ovs_stream
+else:
+    import ovs.stream_unix as ovs_stream
 
 
 def handle_rpc(rpc, msg):
@@ -53,13 +56,13 @@ def handle_rpc(rpc, msg):
 
 
 def do_listen(name):
+    ovs.daemon.daemonize()
+
     error, pstream = ovs_stream.PassiveStream.open(name)
     if error:
         sys.stderr.write("could not listen on \"%s\": %s\n"
                          % (name, os.strerror(error)))
         sys.exit(1)
-
-    ovs.daemon.daemonize()
 
     rpcs = []
     done = False

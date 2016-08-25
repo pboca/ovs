@@ -17,6 +17,7 @@ import os
 import os.path
 import random
 import socket
+import sys
 
 import six
 from six.moves import range
@@ -24,6 +25,10 @@ from six.moves import range
 import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
+
+if sys.platform == "win32":
+    import win32file
+    import win32event
 
 vlog = ovs.vlog.Vlog("socket_util")
 
@@ -158,7 +163,15 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
 
 def check_connection_completion(sock):
     p = ovs.poller.SelectPoll()
-    p.register(sock, ovs.poller.POLLOUT)
+    if sys.platform == "win32":
+        event = win32event.CreateEvent(None, False, True, None)
+        win32file.WSAEventSelect(sock, event,
+                                win32file.FD_WRITE |
+                                win32file.FD_CONNECT |
+                                win32file.FD_CLOSE)
+        p.register(event, ovs.poller.POLLOUT)
+    else:
+        p.register(sock, ovs.poller.POLLOUT)
     pfds = p.poll(0)
     if len(pfds) == 1:
         revents = pfds[0][1]
@@ -228,7 +241,10 @@ def inet_open_active(style, target, default_port, dscp):
         try:
             sock.connect(address)
         except socket.error as e:
-            if get_exception_errno(e) != errno.EINPROGRESS:
+            error = get_exception_errno(e)
+            if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                error = errno.EINPROGRESS
+            if error != errno.EINPROGRESS:
                 raise
         return 0, sock
     except socket.error as e:

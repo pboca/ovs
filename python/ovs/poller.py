@@ -18,6 +18,7 @@ import ovs.vlog
 import select
 import socket
 import os
+import sys
 
 try:
     import eventlet.patcher
@@ -54,7 +55,8 @@ class _SelectSelect(object):
     def register(self, fd, events):
         if isinstance(fd, socket.socket):
             fd = fd.fileno()
-        assert isinstance(fd, int)
+        if not sys.platform == "win32":
+            assert isinstance(fd, int)
         if events & POLLIN:
             self.rlist.append(fd)
             events &= ~POLLIN
@@ -75,18 +77,39 @@ class _SelectSelect(object):
         if timeout == 0 and _using_eventlet_green_select():
             timeout = 0.1
 
-        rlist, wlist, xlist = select.select(self.rlist, self.wlist, self.xlist,
-                                            timeout)
-        events_dict = {}
-        for fd in rlist:
-            events_dict[fd] = events_dict.get(fd, 0) | POLLIN
-        for fd in wlist:
-            events_dict[fd] = events_dict.get(fd, 0) | POLLOUT
-        for fd in xlist:
-            events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
-                                                        POLLHUP |
-                                                        POLLNVAL)
-        return list(events_dict.items())
+        if sys.platform == "win32":
+            import win32event
+            import winerror
+
+            if timeout is None:
+                timeout = 0xFFFFFFFF
+            else:
+                timeout = int(timeout * 1000)
+
+            events = self.rlist + self.wlist + self.xlist
+            if not events:
+                return list()
+            error = win32event.WaitForMultipleObjectsEx(events, False,
+                                                        timeout, False)
+            if error == winerror.WAIT_TIMEOUT:
+                return list()
+
+            return [(events[error], 0)]
+        else:
+            rlist, wlist, xlist = select.select(self.rlist,
+                                                self.wlist,
+                                                self.xlist,
+                                                timeout)
+            events_dict = {}
+            for fd in rlist:
+                events_dict[fd] = events_dict.get(fd, 0) | POLLIN
+            for fd in wlist:
+                events_dict[fd] = events_dict.get(fd, 0) | POLLOUT
+            for fd in xlist:
+                events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
+                                                            POLLHUP |
+                                                            POLLNVAL)
+            return list(events_dict.items())
 
 
 SelectPoll = _SelectSelect
