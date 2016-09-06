@@ -75,10 +75,10 @@ path certificate "%s";
 
     # Racoon configuration footer we use for IKE
     conf_footer = """sainfo anonymous {
-        pfs_group 2;
+        #pfs_group 2;
         lifetime time 1 hour;
-        encryption_algorithm aes;
-        authentication_algorithm hmac_sha1, hmac_md5;
+        encryption_algorithm aes128;
+        authentication_algorithm hmac_sha1;
         compression_algorithm deflate;
 }
 
@@ -109,7 +109,7 @@ path certificate "%s";
         exchange_mode main;
         nat_traversal on;
         proposal {
-                encryption_algorithm aes;
+                encryption_algorithm 3des;
                 hash_algorithm sha1;
                 authentication_method pre_shared_key;
                 dh_group 2;

@@ -30,11 +30,11 @@
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-DAEMON=/usr/share/openvswitch/scripts/ovs-monitor-ipsec # Daemon's location
+DAEMON=/home/ovs/debian/ovs-monitor-ipsec # Daemon's location
 NAME=ovs-monitor-ipsec          # Introduce the short server's name here
-LOGDIR=/var/log/openvswitch     # Log directory to use
+LOGDIR=/usr/local/var/log/openvswitch     # Log directory to use
 
-PIDFILE=/var/run/openvswitch/$NAME.pid 
+PIDFILE=/usr/local/var/run/openvswitch/$NAME.pid 
 
 test -x $DAEMON || exit 0
 
@@ -81,15 +81,15 @@ install_mark_rule() {
 }
 
 start_server() {
-    if [ ! -d /var/run/openvswitch ]; then
-        install -d -m 755 -o root -g root /var/run/openvswitch
+    if [ ! -d /usr/local/var/run/openvswitch ]; then
+        install -d -m 755 -o root -g root /usr/local/var/run/openvswitch
     fi
 
     install_mark_rule "-p esp"
     install_mark_rule "-p udp --dport 4500"
-    /usr/share/openvswitch/scripts/ovs-monitor-ipsec \
+    $DAEMON \
            --pidfile=$PIDFILE --log-file --detach --monitor \
-           unix:/var/run/openvswitch/db.sock
+           unix:/usr/local/var/run/openvswitch/db.sock
 
     return 0
 }
@@ -126,7 +126,7 @@ force_stop() {
 
 case "$1" in
   start)
-        log_daemon_msg "Starting $NAME"
+        echo "Starting $NAME"
         # Check if it's running first
         if running ;  then
             log_progress_msg "apparently already running"
