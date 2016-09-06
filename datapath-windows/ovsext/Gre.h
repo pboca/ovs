@@ -99,4 +99,7 @@ GreTunHdrSize(UINT16 flags)
     return sum;
 }
 
+NDIS_STATUS OvsSlowPathDecapGre(const PNET_BUFFER_LIST packet,
+                                OvsIPv4TunnelKey *tunnelKey);
+
 #endif /*__GRE_H_ */

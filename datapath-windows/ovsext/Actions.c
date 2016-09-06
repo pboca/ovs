@@ -71,63 +71,6 @@ typedef struct _OVS_ACTION_STATS {
 OVS_ACTION_STATS ovsActionStats;
 
 /*
- * There a lot of data that needs to be maintained while executing the pipeline
- * as dictated by the actions of a flow, across different functions at different
- * levels. Such data is put together in a 'context' structure. Care should be
- * exercised while adding new members to the structure - only add ones that get
- * used across multiple stages in the pipeline/get used in multiple functions.
- */
-typedef struct OvsForwardingContext {
-    POVS_SWITCH_CONTEXT switchContext;
-    /* The NBL currently used in the pipeline. */
-    PNET_BUFFER_LIST curNbl;
-    /* NDIS forwarding detail for 'curNbl'. */
-    PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO fwdDetail;
-    /* Array of destination ports for 'curNbl'. */
-    PNDIS_SWITCH_FORWARDING_DESTINATION_ARRAY destinationPorts;
-    /* send flags while sending 'curNbl' into NDIS. */
-    ULONG sendFlags;
-    /* Total number of output ports, used + unused, in 'curNbl'. */
-    UINT32 destPortsSizeIn;
-    /* Total number of used output ports in 'curNbl'. */
-    UINT32 destPortsSizeOut;
-    /*
-     * If 'curNbl' is not owned by OVS, they need to be tracked, if they need to
-     * be freed/completed.
-     */
-    OvsCompletionList *completionList;
-    /*
-     * vport number of 'curNbl' when it is passed from the PIF bridge to the INT
-     * bridge. ie. during tunneling on the Rx side.
-     */
-    UINT32 srcVportNo;
-
-    /*
-     * Tunnel key:
-     * - specified in actions during tunneling Tx
-     * - extracted from an NBL during tunneling Rx
-     */
-    OvsIPv4TunnelKey tunKey;
-
-    /*
-     * Tunneling - Tx:
-     * To store the output port, when it is a tunneled port. We don't foresee
-     * multiple tunneled ports as outport for any given NBL.
-     */
-    POVS_VPORT_ENTRY tunnelTxNic;
-
-    /*
-     * Tunneling - Rx:
-     * Points to the Internal port on the PIF Bridge, if the packet needs to be
-     * de-tunneled.
-     */
-    POVS_VPORT_ENTRY tunnelRxNic;
-
-    /* header information */
-    OVS_PACKET_HDR_INFO layers;
-} OvsForwardingContext;
-
-/*
  * --------------------------------------------------------------------------
  * OvsInitForwardingCtx --
  *     Function to init/re-init the 'ovsFwdCtx' context as the actions pipeline
@@ -140,7 +83,7 @@ typedef struct OvsForwardingContext {
  *     enough for OvsCompleteNBLForwardingCtx() to do its work.
  * --------------------------------------------------------------------------
  */
-static __inline NDIS_STATUS
+__inline NDIS_STATUS
 OvsInitForwardingCtx(OvsForwardingContext *ovsFwdCtx,
                      POVS_SWITCH_CONTEXT switchContext,
                      PNET_BUFFER_LIST curNbl,
@@ -164,6 +107,7 @@ OvsInitForwardingCtx(OvsForwardingContext *ovsFwdCtx,
     ovsFwdCtx->switchContext = switchContext;
     ovsFwdCtx->completionList = completionList;
     ovsFwdCtx->fwdDetail = fwdDetail;
+    ovsFwdCtx->WfpNbl = FALSE;
 
     if (fwdDetail->NumAvailableDestinations > 0) {
         /*
@@ -543,7 +487,9 @@ OvsCompleteNBLForwardingCtx(OvsForwardingContext *ovsFwdCtx,
     NDIS_STRING filterReason;
 
     RtlInitUnicodeString(&filterReason, dropReason);
-    if (ovsFwdCtx->completionList) {
+    if (ovsFwdCtx->WfpNbl) {
+        // do nothing
+    } else if (ovsFwdCtx->completionList) {
         OvsAddPktCompletionList(ovsFwdCtx->completionList, TRUE,
             ovsFwdCtx->fwdDetail->SourcePortId, ovsFwdCtx->curNbl, 1,
             &filterReason);
@@ -577,7 +523,7 @@ OvsCompleteNBLForwardingCtx(OvsForwardingContext *ovsFwdCtx,
  *     The NBL in 'ovsFwdCtx' is consumed.
  * --------------------------------------------------------------------------
  */
-static __inline NDIS_STATUS
+__inline NDIS_STATUS
 OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
 {
     OvsFlowKey key = { 0 };
@@ -717,7 +663,7 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
                                     L"Complete after cloning NBL for encapsulation");
         ovsFwdCtx->curNbl = newNbl;
         status = OvsDoFlowLookupOutput(ovsFwdCtx);
-        ASSERT(ovsFwdCtx->curNbl == NULL);
+        //ASSERT(ovsFwdCtx->curNbl == NULL);
     } else {
         /*
         * XXX: Temporary freeing of the packet until we register a
@@ -822,7 +768,7 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
 
         status = OvsDoFlowLookupOutput(ovsFwdCtx);
     }
-    ASSERT(ovsFwdCtx->curNbl == NULL);
+    //ASSERT(ovsFwdCtx->curNbl == NULL);
     OvsClearTunRxCtx(ovsFwdCtx);
 
     return status;
@@ -927,7 +873,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
         ASSERT(ovsFwdCtx->tunnelRxNic == NULL);
         ASSERT(ovsFwdCtx->tunKey.dst == 0);
     }
-    ASSERT(ovsFwdCtx->curNbl == NULL);
+    //ASSERT(ovsFwdCtx->curNbl == NULL);
 
     return status;
 
@@ -1991,7 +1937,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
     if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
         || ovsFwdCtx.tunnelRxNic != NULL) {
         status = OvsOutputForwardingCtx(&ovsFwdCtx);
-        ASSERT(ovsFwdCtx.curNbl == NULL);
+        //ASSERT(ovsFwdCtx.curNbl == NULL);
     }
 
     ASSERT(ovsFwdCtx.destPortsSizeOut == 0);

@@ -17,6 +17,7 @@
 #ifndef __TUNNEL_H_
 #define __TUNNEL_H_ 1
 
+#include "guiddef.h"
 //
 // OVS_TUNNEL_PENDED_PACKET is the object type we used to store all information
 // needed for out-of-band packet modification and re-injection. This type
@@ -35,6 +36,17 @@ typedef struct OVS_TUNNEL_PENDED_PACKET_
 //
 // Shared function prototypes
 //
+
+VOID
+OvsIpSecClassifyFast(
+                        const FWPS_INCOMING_VALUES *inFixedValues,
+                        const FWPS_INCOMING_METADATA_VALUES *inMetaValues,
+                        NET_BUFFER_LIST *layerData,
+                        const VOID *classifyContext,
+                        const FWPS_FILTER *filter,
+                        UINT64 flowContext,
+                        FWPS_CLASSIFY_OUT *classifyOut);
+
 VOID OvsTunnelClassify(const FWPS_INCOMING_VALUES *inFixedValues,
                        const FWPS_INCOMING_METADATA_VALUES *inMetaValues,
                        VOID *layerData,

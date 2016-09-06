@@ -244,6 +244,15 @@ typedef union _OVS_PACKET_HDR_INFO {
     UINT64 value;
 } OVS_PACKET_HDR_INFO, *POVS_PACKET_HDR_INFO;
 
+typedef struct EspHdr {
+         __u32   spi;
+         __u32   seq_no;
+} EspHdr;
+
+//typedef struct EspData {
+///// TODO
+//} EspData;
+
 typedef struct IPHdr {
    UINT8    ihl:4,
             version:4;

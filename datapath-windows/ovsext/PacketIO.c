@@ -30,6 +30,7 @@
 #include "Flow.h"
 #include "Event.h"
 #include "User.h"
+#include <fwpsk.h>
 
 /* Due to an imported header file */
 #pragma warning( disable:4505 )
@@ -42,6 +43,7 @@
 
 extern NDIS_STRING ovsExtGuidUC;
 extern NDIS_STRING ovsExtFriendlyNameUC;
+extern HANDLE gTransportInjectHandle;
 
 static VOID OvsFinalizeCompletionList(OvsCompletionList *completionList);
 static VOID OvsCompleteNBLIngress(POVS_SWITCH_CONTEXT switchContext,
@@ -133,6 +135,144 @@ OvsGetSendCompleteFlags(ULONG sendFlags)
 
     return sendCompleteFlags;
 }
+extern HANDLE gNetworkInjectHandle;
+#define LOG(Format, ...)                    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, #Format "\n", __VA_ARGS__ + 0 ); // add '+ 0' in case we only have just a string to print :)
+void OvsIpSecInjectComplete(
+   _Inout_ void* context,
+   _Inout_ NET_BUFFER_LIST* netBufferList,
+   _In_ BOOLEAN dispatchLevel
+   )
+{
+   UNREFERENCED_PARAMETER(context);
+   UNREFERENCED_PARAMETER(netBufferList);
+   UNREFERENCED_PARAMETER(dispatchLevel);
+
+   LOG("Injection status: 0x%08X\n", netBufferList->Status);
+}
+
+extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
+
+VOID
+OvsSendIpSecNBLIngress(POVS_SWITCH_CONTEXT switchContext,
+                       PNET_BUFFER_LIST netBufferLists,
+                       ULONG sendFlags)
+{
+    NTSTATUS status;
+
+    if (switchContext->dataFlowState == OvsSwitchPaused) {
+        /* If a filter module is in the Paused state, the filter driver must not
+         * originate any send requests for that filter module. If NDIS calls
+         * FilterSendNetBufferLists, the driver must not call
+         * NdisFSendNetBufferLists to pass on the data until the driver is
+         * restarted. The driver should call NdisFSendNetBufferListsComplete
+         * immediately to complete the send operation. It should set the
+         * complete status in each NET_BUFFER_LIST structure to
+         * NDIS_STATUS_PAUSED.
+         *
+         * http://msdn.microsoft.com/en-us/library/windows/hardware/
+         * ff549966(v=vs.85).aspx */
+        NDIS_STRING filterReason;
+        ULONG sendCompleteFlags = OvsGetSendCompleteFlags(sendFlags);
+
+        RtlInitUnicodeString(&filterReason,
+                             L"Switch state PAUSED, drop before FSendNBL.");
+        OvsReportNBLIngressError(switchContext, netBufferLists, &filterReason,
+                                 NDIS_STATUS_PAUSED);
+        OvsCompleteNBLIngress(switchContext, netBufferLists,
+                              sendCompleteFlags);
+        return;
+    }
+
+    ASSERT(switchContext->dataFlowState == OvsSwitchRunning);
+
+    //NdisAdvanceNetBufferDataStart(NET_BUFFER_LIST_FIRST_NB(netBufferLists), sizeof(EthHdr), FALSE, NULL);
+    //NdisAdvanceNetBufferDataStart(NET_BUFFER_LIST_FIRST_NB(netBufferLists), sizeof(IPHdr), FALSE ,NULL);
+
+    void* dataCopy = NULL;
+    MDL* mdl = NULL;
+    BYTE *data;
+    ULONG length;
+    NET_BUFFER_LIST* clonedNetBufferList = NULL;
+
+    NET_BUFFER *curNb = NET_BUFFER_LIST_FIRST_NB(netBufferLists);
+    length = NET_BUFFER_DATA_LENGTH(curNb);
+
+    data = NdisGetDataBuffer(curNb, length-sizeof(EthHdr), NULL, 1, 0);
+    if (data == NULL) {
+        goto Exit;
+    }
+
+    dataCopy = ExAllocatePoolWithTag(
+        NonPagedPool,
+        length,
+        OVS_MEMORY_TAG
+        );
+
+    if (dataCopy == NULL)
+    {
+        status = STATUS_NO_MEMORY;
+        goto Exit;
+    }
+
+    RtlCopyMemory(dataCopy, data, length-sizeof(EthHdr));
+
+    mdl = IoAllocateMdl(
+        dataCopy,
+        (ULONG)length-sizeof(EthHdr),
+        FALSE,
+        FALSE,
+        NULL
+        );
+    if (mdl == NULL)
+    {
+        status = STATUS_NO_MEMORY;
+        goto Exit;
+    }
+
+    MmBuildMdlForNonPagedPool(mdl);
+
+    status = FwpsAllocateNetBufferAndNetBufferList(
+        gOvsSwitchContext->ovsPool.zeroSizePool,
+        0,
+        0,
+        mdl,
+        0,
+        length-sizeof(EthHdr),
+        &clonedNetBufferList
+        );
+    if (!NT_SUCCESS(status))
+    {
+        goto Exit;
+    }
+
+    NdisAdvanceNetBufferListDataStart(clonedNetBufferList, sizeof(EthHdr), FALSE, NULL);
+
+    status = FwpsInjectNetworkSendAsync(gNetworkInjectHandle, NULL, 0, DEFAULT_COMPARTMENT_ID,
+        clonedNetBufferList, OvsIpSecInjectComplete, NULL);
+    if (!NT_SUCCESS(status)) {
+        //__debugbreak();
+    }
+
+Exit:
+    ;
+}
+
+extern HANDLE gNetworkInjectHandle;
+
+#define LOG(Format, ...)                    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, #Format "\n", __VA_ARGS__ + 0 ); // add '+ 0' in case we only have just a string to print :)
+#pragma warning(disable:4100)
+extern HANDLE gTransportInjectHandle;
+extern HANDLE gNetworkInjectHandle;
+void OvsIpSecInjectComplete3(
+   _Inout_ void* context,
+   _Inout_ NET_BUFFER_LIST* netBufferList,
+   _In_ BOOLEAN dispatchLevel
+   )
+{
+   UNREFERENCED_PARAMETER(context);
+   UNREFERENCED_PARAMETER(netBufferList);
+   UNREFERENCED_PARAMETER(dispatchLevel);
+}
 
 VOID
 OvsSendNBLIngress(POVS_SWITCH_CONTEXT switchContext,
@@ -164,9 +304,8 @@ OvsSendNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     }
 
     ASSERT(switchContext->dataFlowState == OvsSwitchRunning);
-
-    NdisFSendNetBufferLists(switchContext->NdisFilterHandle, netBufferLists,
-                            NDIS_DEFAULT_PORT_NUMBER, sendFlags);
+        NdisFSendNetBufferLists(switchContext->NdisFilterHandle, netBufferLists,
+            NDIS_DEFAULT_PORT_NUMBER, sendFlags);
 }
 
 static __inline VOID
@@ -193,7 +332,7 @@ OvsAppendNativeForwardedPacket(POVS_SWITCH_CONTEXT switchContext,
     NDIS_STRING filterReason;
 
     *nativeNbls = curNbl;
-    nativeNbls = &(curNbl->Next);
+    nativeNbls = &(curNbl->Next); /// TODO
 
     ctx = OvsInitExternalNBLContext(switchContext, curNbl, isRecv);
     if (ctx == NULL) {
@@ -205,7 +344,7 @@ OvsAppendNativeForwardedPacket(POVS_SWITCH_CONTEXT switchContext,
     }
 }
 
-static VOID
+VOID
 OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                    PNET_BUFFER_LIST netBufferLists,
                    ULONG SendFlags)
@@ -322,6 +461,10 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
             if (status != NDIS_STATUS_SUCCESS) {
                 RtlInitUnicodeString(&filterReason, L"OVS-Flow extract failed");
                 goto dropit;
+            }
+
+            if (key.l2.dlType == htons(ETH_TYPE_IPV4)) {
+                LOG("#INGRESS proto %d", key.ipKey.nwProto);
             }
 
             ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);

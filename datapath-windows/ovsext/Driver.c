@@ -103,6 +103,8 @@ DriverEntry(PDRIVER_OBJECT driverObject,
         goto cleanup;
     }
 
+    OVS_LOG_ERROR(__TIME__);
+
     gOvsExtDriverObject = driverObject;
 
     RtlZeroMemory(&driverChars, sizeof driverChars);

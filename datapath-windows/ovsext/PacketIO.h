@@ -44,8 +44,18 @@ VOID OvsAddPktCompletionList(OvsCompletionList *completionList,
 /*
  * Functions related to packet processing.
  */
+VOID
+OvsSendIpSecNBLIngress(POVS_SWITCH_CONTEXT switchContext,
+                       PNET_BUFFER_LIST netBufferLists,
+                       ULONG sendFlags);
+
 VOID OvsSendNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                        PNET_BUFFER_LIST netBufferLists,
                        ULONG sendFlags);
+
+VOID
+OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
+                   PNET_BUFFER_LIST netBufferLists,
+                   ULONG SendFlags);
 
 #endif /* __PACKETIO_H_ */

@@ -65,6 +65,88 @@
 /*
  * Callout and sublayer GUIDs
  */
+/* b16b0a6e-2b2a-41a3-8b39-bd3ffc855ff9 */
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_CALLOUT_STREAM_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xbd, 0x3f, 0xfc, 0x85, 0x5f, 0xf9
+    ); /// TODO change
+
+/* b16b0a6e-2b2a-41a3-8b39-bd3ffc855ffa */
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_CALLOUT_EGRESS_VSWITCH_TRANSPORT_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xbd, 0x3f, 0xfc, 0x85, 0x5f, 0xfa
+    ); /// TODO change
+
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_CALLOUT_INBOUND_IPPACKET_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xbd, 0x3f, 0xfc, 0x85, 0x5f, 0xfb
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_CALLOUT_OUTBOUND_IPPACKET_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xbd, 0x3f, 0xfc, 0x85, 0x5f, 0xfc
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_INBOUND_TRANSPORT_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xaa, 0x3f, 0xec, 0x85, 0x5e, 0xfc
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_ALE_RECEIVE_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xbd, 0x3f, 0xfc, 0x85, 0x4e, 0xfc
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_CALLOUT_INBOUND_TRANSPORT_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xbd, 0x3f, 0xfc, 0x84, 0x5f, 0xfd
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_DATAGRAM,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xaa, 0x3f, 0xfc, 0x84, 0x5f, 0xfd
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xba, 0x4f, 0xfc, 0x84, 0x5f, 0xfd
+    ); /// TODO change
+
+DEFINE_GUID(
+    OVS_TUNNEL_IPSEC_DEMUX_V4,
+    0xb16b0a6e,
+    0x2b2a,
+    0x41a3,
+    0x8b, 0x39, 0xca, 0x4f, 0xfc, 0x84, 0x5f, 0xfd
+    ); /// TODO change
 
 /* b16b0a6e-2b2a-41a3-8b39-bd3ffc855ff8 */
 DEFINE_GUID(
@@ -174,6 +256,7 @@ static VOID     OvsTunnelFilterSetIrpContext(POVS_TUNFLT_REQUEST_LIST listReques
                                              POVS_TUNFLT_REQUEST request);
 static VOID     OvsTunnelFilterCancelIrp(PDEVICE_OBJECT DeviceObject,
                                          PIRP Irp);
+NTSTATUS        OvsTunnelIpSecAddFilters(HANDLE engineSession);
 
 /*
  * Callout driver global variables
@@ -198,6 +281,16 @@ static HANDLE                    gTunnelInitBfeHandle = NULL;
 static UINT32                    gCalloutIdV4 = 0;
 /* Array used for storing tunnel thread's private data. */
 static OVS_TUNFLT_THREAD_CONTEXT gTunnelThreadCtx[OVS_TUNFLT_MAX_THREADS] = { 0 };
+
+/* IpSec filters IDs*/
+static UINT32                    gWfpCalloutsId[128] = {0};
+int                              gWfpCalloutsCount = 0;
+static UINT64                    gWfpFiltersId[128] = {0};
+int                              gWfpFiltersCount = 0;
+
+HANDLE                           gTransportInjectHandle = NULL;
+HANDLE                           gNetworkInjectHandle = NULL;
+HANDLE                           gL2InjectHandle = NULL;
 
 /*
  * Callout driver implementation.
@@ -375,6 +468,185 @@ OvsTunnelAddFilter(HANDLE engineSession,
     return status;
 }
 
+
+
+NTSTATUS
+OvsAddGenericFilter(HANDLE engineSession, 
+                    const GUID* layerKey, 
+                    const GUID* calloutKey, 
+                    const GUID* subLayerKey, 
+                    FWP_ACTION_TYPE type) 
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    FWPM_FILTER filter = {0};
+    FWPM_FILTER_CONDITION filterConditions[3] = {0};
+    UINT conditionIndex = 0;
+
+    /*filterConditions[conditionIndex].fieldKey = FWPM_CONDITION_IP_PROTOCOL;
+    filterConditions[conditionIndex].matchType = FWP_MATCH_EQUAL;
+    filterConditions[conditionIndex].conditionValue.type = FWP_UINT8;
+    filterConditions[conditionIndex].conditionValue.uint16 = IPPROTO_ESP;
+    conditionIndex++;*/
+
+    filter.layerKey = *layerKey;
+    filter.displayData.name = L"IpSec OVS Filter (Inbound)";
+    filter.displayData.description = L"protocol filter for GRE";
+
+    filter.action.type = type;
+    filter.action.calloutKey = *calloutKey;
+    filter.filterCondition = filterConditions;
+    filter.subLayerKey = *subLayerKey;
+    filter.weight.type = FWP_EMPTY; // auto-weight.
+    filter.numFilterConditions = conditionIndex;
+    filter.rawContext = 0;
+
+    status = FwpmFilterAdd(engineSession,
+                           &filter,
+                           NULL,
+                           &gWfpFiltersId[gWfpFiltersCount++]);
+
+    return status;
+}
+
+NTSTATUS
+OvsTunnelIpSecAddFilters(HANDLE engineSession)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    status = OvsAddGenericFilter(engineSession, 
+                                 &FWPM_LAYER_OUTBOUND_MAC_FRAME_NATIVE, 
+                                 &OVS_TUNNEL_IPSEC_CALLOUT_OUTBOUND_IPPACKET_V4,
+                                 &FWPM_SUBLAYER_UNIVERSAL,
+                                 FWP_ACTION_CALLOUT_TERMINATING);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    status = OvsAddGenericFilter(engineSession, 
+                                 &FWPM_LAYER_INBOUND_IPPACKET_V4_DISCARD, 
+                                 &OVS_TUNNEL_IPSEC_V4,
+                                 &FWPM_SUBLAYER_INSPECTION,
+                                 FWP_ACTION_CALLOUT_INSPECTION);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    return STATUS_SUCCESS;
+}
+/*
+ * --------------------------------------------------------------------------
+ * This function registers callouts for intercepting UDP traffic at WFP
+ * FWPM_LAYER_DATAGRAM_DATA_V4 layer.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsTunnelRegisterIpSecCallouts(VOID *deviceObject)
+{
+    NTSTATUS status;
+
+    FWPS_CALLOUT sCallout = {0};
+    FWPM_CALLOUT mCallout = {0};
+
+    FWPM_DISPLAY_DATA displayData = {0};
+
+    /// TODO - create injection handle
+    status = FwpsInjectionHandleCreate(AF_INET, FWPS_INJECTION_TYPE_TRANSPORT, 
+                              &gTransportInjectHandle);
+    if (!NT_SUCCESS(status)) {
+        //__debugbreak();
+        goto Exit;
+    }
+
+    status = FwpsInjectionHandleCreate(AF_INET, FWPS_INJECTION_TYPE_NETWORK, 
+                              &gNetworkInjectHandle);
+    if (!NT_SUCCESS(status)) {
+        //__debugbreak();
+        goto Exit;
+    }
+
+    status = FwpsInjectionHandleCreate(AF_UNSPEC, FWPS_INJECTION_TYPE_L2, 
+                              &gL2InjectHandle);
+    if (!NT_SUCCESS(status)) {
+        //__debugbreak();
+        goto Exit;
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    sCallout.calloutKey = OVS_TUNNEL_IPSEC_CALLOUT_OUTBOUND_IPPACKET_V4;
+    mCallout.applicableLayer = FWPM_LAYER_OUTBOUND_MAC_FRAME_NATIVE;
+    sCallout.classifyFn = OvsIpSecClassifyFast;
+    sCallout.notifyFn = OvsTunnelNotify;
+
+    displayData.name = L"IpSec OVS Callout";
+    displayData.description = L"Intercepts IpSec decrypted traffic on egress";
+
+    mCallout.calloutKey = sCallout.calloutKey;
+    mCallout.displayData = displayData;
+
+    status = FwpsCalloutRegister(deviceObject, &sCallout, &gWfpCalloutsId[gWfpCalloutsCount++]);
+    if (!NT_SUCCESS(status)) {
+        OVS_LOG_ERROR("Failed to register WFP callout, status: %x.",
+                          status);
+        goto Exit;
+    }
+
+    status = FwpmCalloutAdd(gEngineHandle, &mCallout, NULL, NULL);
+    if (!NT_SUCCESS(status)) {
+        if (STATUS_FWP_ALREADY_EXISTS != status) {
+            OVS_LOG_ERROR("Failed to add WFP callout, status: %x.",
+                          status);
+            goto Exit;
+        }
+        status = STATUS_SUCCESS;
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    sCallout.calloutKey = OVS_TUNNEL_IPSEC_V4;
+    mCallout.applicableLayer = FWPM_LAYER_INBOUND_IPPACKET_V4_DISCARD;
+    sCallout.classifyFn = OvsIpSecClassifyFast;
+    sCallout.notifyFn = OvsTunnelNotify;
+
+    displayData.name = L"IpSec OVS Callout";
+    displayData.description = L"Intercepts IpSec decrypted traffic on egress";
+
+    mCallout.calloutKey = sCallout.calloutKey;
+    mCallout.displayData = displayData;
+
+    status = FwpsCalloutRegister(deviceObject, &sCallout, &gWfpCalloutsId[gWfpCalloutsCount++]);
+    if (!NT_SUCCESS(status)) {
+        OVS_LOG_ERROR("Failed to register WFP callout, status: %x.",
+                          status);
+        ASSERT(status == NDIS_STATUS_SUCCESS);
+        goto Exit;
+    }
+
+    status = FwpmCalloutAdd(gEngineHandle, &mCallout, NULL, NULL);
+    if (!NT_SUCCESS(status)) {
+        if (STATUS_FWP_ALREADY_EXISTS != status) {
+            OVS_LOG_ERROR("Failed to add WFP callout, status: %x.",
+                          status);
+            ASSERT(status == NDIS_STATUS_SUCCESS);
+            goto Exit;
+        }
+        status = STATUS_SUCCESS;
+    }
+
+Exit:
+
+    if (!NT_SUCCESS(status)){
+        /// TODO cleanup
+        int i;
+        for (i = 0; i < gWfpCalloutsCount; i++) {
+            FwpsCalloutUnregisterById(gWfpCalloutsId[i]);
+        }
+        for (i = 0; i < gWfpCalloutsCount; i++) {
+            FwpmCalloutDeleteById(gEngineHandle, gWfpCalloutsId[i]);
+        }
+    }
+
+    return status;
+}
+
 /*
  * --------------------------------------------------------------------------
  * This function registers callouts for intercepting UDP traffic at WFP
@@ -477,6 +749,12 @@ OvsTunnelRegisterCallouts(VOID *deviceObject)
         }
     }
 
+    status = OvsTunnelRegisterIpSecCallouts(deviceObject);
+    if (!NT_SUCCESS(status)) {
+        //__debugbreak();
+        goto Exit; /// TODO cleanup
+    }
+
     /* In order to use this callout a socket must be opened. */
     status = OvsTunnelRegisterDatagramDataCallouts(&FWPM_LAYER_DATAGRAM_DATA_V4,
                                                    &OVS_TUNNEL_CALLOUT_V4,
@@ -484,6 +762,12 @@ OvsTunnelRegisterCallouts(VOID *deviceObject)
                                                    &gCalloutIdV4);
     if (!NT_SUCCESS(status)) {
         goto Exit;
+    }
+
+    status = OvsTunnelIpSecAddFilters(gEngineHandle);
+    if (!NT_SUCCESS(status)) {
+        //__debugbreak();
+        goto Exit; /// TODO cleanup
     }
 
     status = FwpmTransactionCommit(gEngineHandle);
@@ -506,9 +790,25 @@ Exit:
 VOID
 OvsTunnelUnregisterCallouts()
 {
+    int i = 0;
+    for (i = 0; i < gWfpFiltersCount; i++) {
+        FwpmFilterDeleteById(gEngineHandle, gWfpFiltersId[i]);
+    }
+
     FwpsCalloutUnregisterById(gCalloutIdV4);
+    for (i = 0; i < gWfpCalloutsCount; i++) {
+        FwpsCalloutUnregisterById(gWfpCalloutsId[i]);
+    }
+
     FwpmSubLayerDeleteByKey(gEngineHandle, &OVS_TUNNEL_SUBLAYER);
+
     FwpmCalloutDeleteById(gEngineHandle, gCalloutIdV4);
+    for (i = 0; i < gWfpCalloutsCount; i++) {
+        FwpmCalloutDeleteById(gEngineHandle, gWfpCalloutsId[i]);
+    }
+
+    FwpsInjectionHandleDestroy(gTransportInjectHandle);
+    gTransportInjectHandle = NULL;
 }
 
 VOID

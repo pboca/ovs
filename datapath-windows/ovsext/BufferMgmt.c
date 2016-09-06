@@ -1123,6 +1123,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
                  BOOLEAN lastPacket, UINT16 packetCounter)
 {
     EthHdr *dstEth = NULL;
+    UINT32 l3Offset = sizeof(EthHdr);
     TCPHdr *dstTCP = NULL;
     PMDL mdl = NULL;
     PUINT8 bufferStart = NULL;
@@ -1132,8 +1133,19 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
     bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(mdl, LowPagePriority);
     if (!bufferStart) {
         return NDIS_STATUS_RESOURCES;
+
+    // small fix
+    bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(nb);
+    dstEth = (EthHdr *)bufferStart;
+    if (dstEth->Type == ETH_TYPE_802_1PQ_NBO) {
+        l3Offset += sizeof (Eth_802_1pq_Tag);
+        /*
+        * XXX Please note after this point, src mac and dst mac should
+        * not be accessed through eth
+        */
+        dstEth = (EthHdr *)(bufferStart + NET_BUFFER_CURRENT_MDL_OFFSET(nb)
+                            + sizeof (Eth_802_1pq_Tag));
     }
-    dstEth = (EthHdr *)(bufferStart + NET_BUFFER_CURRENT_MDL_OFFSET(nb));
 
     switch (dstEth->Type) {
     case ETH_TYPE_IPV4_NBO:
@@ -1142,7 +1154,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
 
         ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
                 >= sizeof(EthHdr) + sizeof(IPHdr) + sizeof(TCPHdr));
-        dstIP = (IPHdr *)((PCHAR)dstEth + sizeof(*dstEth));
+        dstIP = (IPHdr *)((PCHAR)bufferStart + l3Offset);
         dstTCP = (TCPHdr *)((PCHAR)dstIP + dstIP->ihl * 4);
         ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
                 >= sizeof(EthHdr) + dstIP->ihl * 4 + TCP_HDR_LEN(dstTCP));
@@ -1173,7 +1185,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
                                          csumLength);
         dstTCP->check = CalculateChecksumNB(nb,
                                             csumLength,
-                                            sizeof(*dstEth) + dstIP->ihl * 4);
+                                            l3Offset + dstIP->ihl * 4);
         break;
     }
     case ETH_TYPE_IPV6_NBO:
@@ -1182,14 +1194,15 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
 
         ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
             >= sizeof(EthHdr) + sizeof(IPv6Hdr) + sizeof(TCPHdr));
-        dstIP = (IPv6Hdr *)((PCHAR)dstEth + sizeof(*dstEth));
+        dstIP = (IPv6Hdr *)((PCHAR)bufferStart + l3Offset);
         dstTCP = (TCPHdr *)((PCHAR)dstIP + sizeof(IPv6Hdr));
         ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
             >= sizeof(EthHdr) + sizeof(IPv6Hdr) + TCP_HDR_LEN(dstTCP));
 
         /* Fix IP length */
         ASSERT(dstIP->nexthdr == IPPROTO_TCP);
-        dstIP->payload_len = htons(segmentSize + sizeof(IPv6Hdr) + TCP_HDR_LEN(dstTCP));
+        dstIP->payload_len = htons(segmentSize + sizeof(IPv6Hdr)
+                                   + TCP_HDR_LEN(dstTCP));
 
         dstTCP->seq = htonl(seqNumber);
         if (dstTCP->fin) {
@@ -1206,7 +1219,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
                                            csumLength);
         dstTCP->check = CalculateChecksumNB(nb,
                                             csumLength,
-                                            sizeof(*dstEth) + sizeof(IPv6Hdr));
+                                            l3Offset + sizeof(IPv6Hdr));
         break;
     }
     default:
@@ -1486,6 +1499,10 @@ OvsCompleteNBL(POVS_SWITCH_CONTEXT context,
 
 
     ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(nbl);
+
+    if (!(ctx && ctx->magic == OVS_CTX_MAGIC)) {
+        return NULL;
+    }
 
     ASSERT(ctx && ctx->magic == OVS_CTX_MAGIC);
 

@@ -435,3 +435,59 @@ end:
     }
     return status;
 }
+
+NDIS_STATUS
+OvsSlowPathDecapGre(const PNET_BUFFER_LIST packet,
+                    OvsIPv4TunnelKey *tunKey)
+{
+    NDIS_STATUS status = NDIS_STATUS_FAILURE;
+    struct IPHdr ip_storage;
+    const struct IPHdr *ipHdr;
+    OVS_PACKET_HDR_INFO layers;
+
+    layers.value = 0;
+
+#pragma warning(disable:4127)
+    do {
+        ipHdr = OvsGetIp(packet, layers.l3Offset, &ip_storage);
+        if (ipHdr) {
+            layers.l4Offset = layers.l3Offset + ipHdr->ihl * 4;
+        } else {
+            break;
+        }
+
+        tunKey->src = ipHdr->saddr;
+        tunKey->dst = ipHdr->daddr;
+        tunKey->tos = ipHdr->tos;
+        tunKey->ttl = ipHdr->ttl;
+        tunKey->pad = 0;
+
+        GREHdr greStorage;
+        const GREHdr *greHdr = OvsGetPacketBytes(packet, sizeof(GREHdr),
+                                                 layers.l4Offset, &greStorage);
+
+        /* Validate if GRE header protocol type. */
+        if (greHdr->protocolType != GRE_NET_TEB) {
+            status = STATUS_NDIS_INVALID_PACKET;
+            break;
+        }
+
+        PCHAR currentOffset = (PCHAR)greHdr + sizeof *greHdr;
+
+        if (greHdr->flags & GRE_CSUM) {
+            tunKey->flags |= OVS_TNL_F_CSUM;
+        }
+
+        if (greHdr->flags & GRE_KEY) {
+            tunKey->flags |= OVS_TNL_F_KEY;
+            UINT32 key = 0;
+            RtlCopyMemory(&key, currentOffset, 4);
+            tunKey->tunnelId = (UINT64)key << 32;
+        }
+
+        status = NDIS_STATUS_SUCCESS;
+
+    } while(FALSE);
+
+    return status;
+}
